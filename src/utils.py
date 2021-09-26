@@ -1,16 +1,34 @@
 import numpy as np
+import torch
+from torch.nn.functional import interpolate
 
-def normalize_mask(mask):
-	"""
-		c_mask = c_mask.float().cpu()
-		c_mask /= c_mask.max()
-		c_mask = c_mask.numpy()
+def renumerate_mask(mask):
+	if (isinstance(mask, np.ndarray)):
+		mask = torch.from_numpy(mask)
+
+	labels = torch.unique(mask)
+	mask_renum = mask.clone()
+	for ind, label in enumerate(labels):
+		mask_renum[mask == label] = ind
+	return mask_renum
+
+def upscale_mask(mask, target_size):
+	if (isinstance(mask, np.ndarray)):
+		mask = torch.from_numpy(mask).float()
 		
-		s_mask = s_mask.float().cpu()
-		s_mask /= s_mask.max()
-		s_mask = s_mask.numpy()
-	"""
+	mask = interpolate(
+				mask.unsqueeze(1).float(),
+				size=target_size,
+				mode="nearest",
+			).squeeze()
 	return mask
+	
+def normalize_mask(mask):
+	mask = mask.float().cpu().numpy()
+	mask -= mask.min()
+	mask /= mask.max()
+
+	return np.array(mask*255, dtype=np.uint8)
 	
 def tensor_to_array(t):
 	return np.array(t.cpu().squeeze(0).transpose(0, 1).transpose(1, 2)*255, dtype=np.uint8)
