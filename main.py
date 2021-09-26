@@ -25,6 +25,8 @@ def main():
 						help='WCT procedure content/style fusion proportion, e.g. 1.0 means full stylization, 0.0 would return content image.')
 	parser.add_argument('--save_masks', type=bool, default=False,
 						help='Boolean flag whether save segmentation/clustering masks or not.')
+	parser.add_argument('--HDBSCAN_cluster_size', "-cluster_size", type=int, default=1500,
+							help='HDBSCAN cluster size hyperparameter, e.g 1500.')
 	parser.add_argument('--gpu', type=int, default=0,
 						help='GPU device id.')
 	parser.add_argument('--model_path', type=str, default='model/model_state.pth',
@@ -40,7 +42,7 @@ def main():
 		device = 'cpu'
 		print("Working on CPU\n")
 	
-	model = IMST(alpha=args.WCT_alpha, device=device)
+	model = IMST(hdbscan_cluster_size=args.HDBSCAN_cluster_size, alpha=args.WCT_alpha, device=device)
 	model.load_state_dict(torch.load(args.model_path, map_location=lambda storage, loc: storage))
 	model = model.to(device)
 	

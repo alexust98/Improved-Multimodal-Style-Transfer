@@ -9,13 +9,12 @@ from src.segment import run_segmentation
 from src.cluster import run_clustering
 
 class IMST(nn.Module):
-	def __init__(self,
-				alpha,
-				device):
+	def __init__(self, hdbscan_cluster_size, alpha, device):
 		super().__init__()
 		
 		self.alpha = alpha
 		self.device = device
+		self.hdbscan_cluster_size = hdbscan_cluster_size
 
 		self.vgg_encoder = VGGEncoder().to(device)
 		self.decoder = Decoder(4).to(device)
@@ -36,12 +35,7 @@ class IMST(nn.Module):
 	def match_clusters(self, cf, sf, cl, sl):
 		pass
 	
-	def run_ST(self,
-				 content_image,
-				 style_image,
-				 use_super=True,
-				 randomize=True):
-		
+	def run_ST(self, content_image, style_image, randomize=False):
 		c_tensor = transforms.ToTensor()(content_image).unsqueeze(0).to(self.device)
 		s_tensor = transforms.ToTensor()(style_image).unsqueeze(0).to(self.device)
 		
@@ -55,7 +49,7 @@ class IMST(nn.Module):
 		content_labels = run_segmentation(content_image, device=self.device)
 		
 		# Cluster style image
-		style_labels = run_clustering(style_image, min_cluster_size=1000, device=self.device)
+		style_labels = run_clustering(style_image, min_cluster_size=self.hdbscan_cluster_size, device=self.device)
 
 		"""
 		content_k = int(content_label.max().item() + 1)

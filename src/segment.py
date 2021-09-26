@@ -1,7 +1,7 @@
 import torch
 from torch.nn.functional import interpolate
 from torchvision import transforms
-from src.utils import renumerate_mask
+from src.utils import renumerate_mask, upscale_mask
 
 def segmentator_preprocess(image):
 	preproc = transforms.Compose([
@@ -49,12 +49,7 @@ def run_midas(image, device, threshold=300.0):
 	# Run MiDaS sky detection
 	with torch.no_grad():
 		prediction = midas(image_trans)
-		prediction = interpolate(
-			prediction.unsqueeze(1),
-			size=image.shape[:2],
-			mode="bicubic",
-			align_corners=False,
-		).squeeze()
+		prediction = upscale_mask(prediction, image.shape[:2])
 		sky_mask = (prediction < threshold)*1.0
 
 	return sky_mask

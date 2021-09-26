@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch.nn.functional import interpolate
 
 def renumerate_mask(mask):
 	if (isinstance(mask, np.ndarray)):
@@ -11,6 +12,17 @@ def renumerate_mask(mask):
 		mask_renum[mask == label] = ind
 	return mask_renum
 
+def upscale_mask(mask, target_size):
+	if (isinstance(mask, np.ndarray)):
+		mask = torch.from_numpy(mask).float()
+		
+	mask = interpolate(
+				mask.unsqueeze(1).float(),
+				size=target_size,
+				mode="nearest",
+			).squeeze()
+	return mask
+	
 def normalize_mask(mask):
 	mask = mask.float().cpu().numpy()
 	mask -= mask.min()
