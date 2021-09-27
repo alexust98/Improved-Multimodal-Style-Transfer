@@ -7,6 +7,7 @@ from src.decoder import Decoder
 
 from src.segment import run_segmentation
 from src.cluster import run_clustering
+from src.matching import match_clusters
 
 class IMST(nn.Module):
 	def __init__(self, hdbscan_cluster_size, alpha, device):
@@ -31,9 +32,6 @@ class IMST(nn.Module):
 			s_mean, s_std = calc_mean_std(s)
 			loss += F.mse_loss(c_mean, s_mean) + F.mse_loss(c_std, s_std)
 		return loss
-
-	def match_clusters(self, cf, sf, cl, sl):
-		pass
 	
 	def run_ST(self, content_image, style_image, randomize=False):
 		c_tensor = transforms.ToTensor()(content_image).unsqueeze(0).to(self.device)
@@ -44,30 +42,22 @@ class IMST(nn.Module):
 		# Get content/style encoder feaures for WCT and Matching procedures
 		_, cf_match, _, cf = self.vgg_encoder(c_tensor.to(self.device))
 		_, sf_match, _, sf = self.vgg_encoder(s_tensor.to(self.device))
+		target_w, target_h = cf.shape[-2:]
 
 		# Segment content image
 		content_labels = run_segmentation(content_image, device=self.device)
-		
 		# Cluster style image
 		style_labels = run_clustering(style_image, min_cluster_size=self.hdbscan_cluster_size, device=self.device)
+		# Generate matching map between content segments and style clusters
+		matching_map = match_clusters(cf_match, sf_match, content_labels, style_labels, (target_w, target_h))
+
+		if (randomize):
+			style_k = int(style_labels.amax()) + 1
+			style_perm = torch.randperm(style_k)
+			for content_ind in matching_map.keys():
+					matching_map[content_ind] = matching_map[content_ind][style_perm]
 
 		"""
-		content_k = int(content_label.max().item() + 1)
-		style_k = int(style_label.max().item() + 1)
-		start = time()
-		match, match_full = self.match_clusters(cf_match[0, :, ::4, ::4], sf_match[0, :, ::4, ::4], content_label, style_label)
-		end = time()
-		print("Matching: ", end-start)
-		#print("MATCH:\n")
-
-		P = torch.randperm(style_k)
-		for k in match.keys():
-			if randomize:
-				match[k] = match[k][P]
-			#print(k, "||", match[k], "\n")
-		content_label = content_label.to(self.device)
-		style_label = style_label.to(self.device)
-
 		cs_feature = torch.zeros_like(cf)
 		#cs_feature_full = torch.zeros_like(cf)
 
