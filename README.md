@@ -14,7 +14,7 @@ Command to run IMST: <br>
 -- gpu: GPU device id. -1 means cpu <br>
 -- model_path: Pretrained model path (encoder + decoder)
 <hr>
-Example: \>\> python main.py --content "contents/content3.jpg" --style "styles/style3.jpg" --imsize 512 --save_masks True --HDBSCAN_cluster_size 1000 <br>
+Example: >> python main.py --content "contents/content3.jpg" --style "styles/style3.jpg" --imsize 512 --save_masks True --HDBSCAN_cluster_size 1000 <br>
 
 Stylization samples: <br>
 <img src="https://user-images.githubusercontent.com/45120679/135097024-04e01d53-6f87-4f9f-b11f-855b11ae6f5d.jpg" width="600"><br>
