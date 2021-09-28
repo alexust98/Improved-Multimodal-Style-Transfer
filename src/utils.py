@@ -29,12 +29,9 @@ def reshape_arr(arr, target_size):
 			).squeeze()
 	return arr
 	
-def normalize_mask(mask):
-	mask = mask.float().cpu().numpy()
-	mask -= mask.min()
-	mask /= mask.max()
+def normalize_arr(arr):
+	arr = arr.float().cpu().numpy()
+	arr -= arr.min()
+	arr /= arr.max()
 
-	return np.array(mask*255, dtype=np.uint8)
-	
-def tensor_to_array(t):
-	return np.array(t.cpu().squeeze(0).transpose(0, 1).transpose(1, 2)*255, dtype=np.uint8)
+	return np.array(arr*255, dtype=np.uint8)
