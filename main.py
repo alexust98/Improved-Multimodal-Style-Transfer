@@ -9,7 +9,7 @@ from skimage.io import imsave
 from time import time
 
 from src.model import IMST
-from src.utils import normalize_mask, tensor_to_array
+from src.utils import normalize_arr
 
 def main():
 	parser = argparse.ArgumentParser(description='Improved-Multimodal-Style-Transfer')
@@ -21,10 +21,12 @@ def main():
 						help='Output path for generated image, no need to add ext, e.g. out.')
 	parser.add_argument('--imsize', type=int, default=512,
 						help='Size of content and style images to be scaled to. E.g. 512x512. Non-square shapes are not supported yet.')
-	parser.add_argument('--WCT_alpha', '-alpha', default=1.0,
+	parser.add_argument('--WCT_alpha', '-alpha', type=float, default=1.0,
 						help='WCT procedure content/style fusion proportion, e.g. 1.0 means full stylization, 0.0 would return content image.')
 	parser.add_argument('--save_masks', type=bool, default=False,
 						help='Boolean flag whether save segmentation/clustering masks or not.')
+	parser.add_argument('--randomize_matching', type=bool, default=False,
+						help='Applies random shuffling to matching map.')
 	parser.add_argument('--HDBSCAN_cluster_size', "-cluster_size", type=int, default=1500,
 							help='HDBSCAN cluster size hyperparameter, e.g 1500.')
 	parser.add_argument('--gpu', type=int, default=0,
@@ -54,19 +56,23 @@ def main():
 	# Run ST
 	with torch.no_grad():
 		t_start = time()
-		out, c_mask, s_mask = model.run_ST(c, s)
+		out, c_mask, s_mask = model.run_ST(c, s, args.randomize_matching)
 		t_end = time()
 		print("ST time: ", t_end-t_start)
 		if (args.save_masks):
-			c_mask = normalize_mask(c_mask)
-			s_mask = normalize_mask(s_mask)
+			c_mask = normalize_arr(c_mask)
+			s_mask = normalize_arr(s_mask)
 			
 			ind = args.output_name.rfind(".")
 			imsave(args.output_name[:ind] + "_c_mask" + args.output_name[ind:], c_mask, quality=100)
 			imsave(args.output_name[:ind] + "_s_mask" + args.output_name[ind:], s_mask, quality=100)
 		
-
-	out = tensor_to_array(out)
+	clip=False # Change to True if you want to clip decoder output
+	if (clip):
+		out = normalize_arr(out.clip(min=0.0, max=1.0).squeeze(0).transpose(0, 1).transpose(1, 2))
+	else:
+		out = normalize_arr(out.squeeze(0).transpose(0, 1).transpose(1, 2))
+		
 	imsave(args.output_name, out, quality=100)
 	return;
 	

@@ -1,7 +1,7 @@
 from skimage.segmentation import slic
 import numpy as np
 import hdbscan
-from src.utils import renumerate_mask, upscale_mask
+from src.utils import renumerate_mask, fit_shape
 import torch
 
 def run_superpixel(image, mask, scale, n_segments=None):
@@ -33,6 +33,6 @@ def run_clustering(image, min_cluster_size, device, hdbscan_scale_factor = 4):
 	
 	# Run superpixelization
 	mask_superpixeled = run_superpixel(image, mask, hdbscan_scale_factor)
-	mask_superpixeled = upscale_mask(mask_superpixeled[None, :, :], (w*hdbscan_scale_factor, h*hdbscan_scale_factor))
+	mask_superpixeled = fit_shape(mask_superpixeled[None, :, :], (w*hdbscan_scale_factor, h*hdbscan_scale_factor), renumerate=True)
 
 	return mask_superpixeled

@@ -4,9 +4,11 @@ import numpy as np
 from torchvision import transforms
 from src.encoder import VGGEncoder
 from src.decoder import Decoder
+from src.utils import fit_shape
 
 from src.segment import run_segmentation
 from src.cluster import run_clustering
+from src.matching import match_clusters
 
 class IMST(nn.Module):
 	def __init__(self, hdbscan_cluster_size, alpha, device):
@@ -31,62 +33,84 @@ class IMST(nn.Module):
 			s_mean, s_std = calc_mean_std(s)
 			loss += F.mse_loss(c_mean, s_mean) + F.mse_loss(c_std, s_std)
 		return loss
+		
+	def weighted_WCT(self, cf_cl, style_scores):
+		cf_cl_init = cf_cl.clone()
+		
+		c_mean = torch.mean(cf_cl, 2)
+		cf_cl = cf_cl - c_mean.unsqueeze(-1)
+		
+		c_cov = torch.bmm(cf_cl, cf_cl.transpose(1, 2)) / (cf_cl.shape[2] - 1)
+		c_u, c_e, c_v = torch.svd(c_cov)
+		eps = 1e-6
+		c_d = (c_e+eps).pow(-0.5)
 
-	def match_clusters(self, cf, sf, cl, sl):
-		pass
+		whitened = torch.bmm(torch.bmm(c_v, torch.diag_embed(c_d)), (c_u.transpose(1, 2)))
+		whitened = torch.bmm(whitened, cf_cl)
+
+		s_cov = torch.zeros((self.b, self.c, self.c)).to(self.device)
+		s_mean = torch.zeros((self.b, self.c, 1)).to(self.device)
+		total_pixels = 0.0
+		
+		for style_ind, sf in enumerate(self.sf_per_label):
+			sb, sc, swh = sf.shape
+			s_mean += style_scores[style_ind]*torch.sum(sf, 2, keepdim=True)
+			total_pixels += style_scores[style_ind]*swh
+		s_mean /= total_pixels
+		
+		for style_ind, sf in enumerate(self.sf_per_label):
+			sf = sf - s_mean
+			s_cov += style_scores[style_ind]*torch.bmm(sf, sf.transpose(1, 2))
+			
+		s_cov /= (total_pixels - 1)
+		s_u, s_e, s_v = torch.svd(s_cov)
+		s_d = s_e.pow(0.5)
+		
+		colored = torch.bmm(torch.bmm(s_u, torch.diag_embed(s_d)), s_v.transpose(1, 2))
+		colored = torch.bmm(colored, whitened)
+		
+		colored = colored + s_mean
+		colored_feature = self.alpha * colored + (1 - self.alpha) * cf_cl_init
+		return colored_feature
 	
-	def run_ST(self, content_image, style_image, randomize=False):
+	def run_ST(self, content_image, style_image, randomize_matching=False):
 		c_tensor = transforms.ToTensor()(content_image).unsqueeze(0).to(self.device)
 		s_tensor = transforms.ToTensor()(style_image).unsqueeze(0).to(self.device)
-		
-		cs = []
 
 		# Get content/style encoder feaures for WCT and Matching procedures
 		_, cf_match, _, cf = self.vgg_encoder(c_tensor.to(self.device))
 		_, sf_match, _, sf = self.vgg_encoder(s_tensor.to(self.device))
+		self.b, self.c, self.w, self.h = cf.shape
 
 		# Segment content image
 		content_labels = run_segmentation(content_image, device=self.device)
-		
 		# Cluster style image
 		style_labels = run_clustering(style_image, min_cluster_size=self.hdbscan_cluster_size, device=self.device)
+		# Generate matching map between content segments and style clusters
+		matching_map = match_clusters(cf_match, sf_match, content_labels, style_labels, (self.w, self.h))
 
-		"""
-		content_k = int(content_label.max().item() + 1)
-		style_k = int(style_label.max().item() + 1)
-		start = time()
-		match, match_full = self.match_clusters(cf_match[0, :, ::4, ::4], sf_match[0, :, ::4, ::4], content_label, style_label)
-		end = time()
-		print("Matching: ", end-start)
-		#print("MATCH:\n")
+		style_k = len(matching_map[0])
+		if (randomize_matching):
+			style_perm = torch.randperm(style_k)
+			for content_ind in matching_map.keys():
+					matching_map[content_ind] = matching_map[content_ind][style_perm]
 
-		P = torch.randperm(style_k)
-		for k in match.keys():
-			if randomize:
-				match[k] = match[k][P]
-			#print(k, "||", match[k], "\n")
-		content_label = content_label.to(self.device)
-		style_label = style_label.to(self.device)
+		# Select style features for each style cluster
+		self.sf_per_label = []
+		# Fit masks to features shape
+		cl_fit = fit_shape(content_labels.unsqueeze(0), (self.w, self.h), renumerate=True)
+		sl_fit = fit_shape(style_labels.unsqueeze(0), (self.w, self.h), renumerate=True)
+		
+		for style_ind in range(style_k):
+			sl_ind = (sl_fit == style_ind).unsqueeze(dim=0).expand_as(sf).bool()
+			sf_sl = sf[sl_ind].reshape(sf.shape[0], sf.shape[1], -1)
+			self.sf_per_label.append(sf_sl)
 
-		cs_feature = torch.zeros_like(cf)
-		#cs_feature_full = torch.zeros_like(cf)
+		cs_feature = cf.clone()
+		for content_ind, style_scores in matching_map.items():
+			cl_ind = (cl_fit == content_ind)
+			cs_feature[:, :, cl_ind] = self.weighted_WCT(cf[:, :, cl_ind], style_scores)
 
-		for i, j in match.items():
-			cl = (content_label == i).unsqueeze(dim=0).expand_as(cf).to(torch.float)
-			sub_sfs = []
-			for jj, _ in enumerate(j):
-				sl = (style_label == jj).unsqueeze(dim=0).expand_as(sf).to(torch.bool)
-				sub_sf = sf[sl].reshape(sf.shape[0], -1)
-				sub_sfs.append(sub_sf)
-			cs_feature += labeled_whiten_and_color2(cf, sub_sfs, alpha, cl, j)
+		out = self.decoder(cs_feature)
 
-		cs.append(cs_feature.unsqueeze(dim=0))
-		#cs_full.append(cs_feature_full.unsqueeze(dim=0))
-			
-		cs = torch.cat(cs, dim=0)
-		#cs_full = torch.cat(cs_full, dim=0)
-		out = self.decoder(cs).cpu()
-		out_full = None#self.decoder(cs_full).cpu()
-		"""
-
-		return c_tensor, content_labels, style_labels
+		return out, content_labels, style_labels

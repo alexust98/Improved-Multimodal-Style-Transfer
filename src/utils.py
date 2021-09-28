@@ -11,24 +11,27 @@ def renumerate_mask(mask):
 	for ind, label in enumerate(labels):
 		mask_renum[mask == label] = ind
 	return mask_renum
+	
+def fit_shape(arr, target_shape, renumerate=False):
+	arr = reshape_arr(arr, target_shape)
+	if (renumerate):
+		arr = renumerate_mask(arr)
+	return arr
 
-def upscale_mask(mask, target_size):
-	if (isinstance(mask, np.ndarray)):
-		mask = torch.from_numpy(mask).float()
+def reshape_arr(arr, target_size):
+	if (isinstance(arr, np.ndarray)):
+		arr = torch.from_numpy(arr).float()
 		
-	mask = interpolate(
-				mask.unsqueeze(1).float(),
+	arr = interpolate(
+				arr.unsqueeze(1).float(),
 				size=target_size,
 				mode="nearest",
 			).squeeze()
-	return mask
+	return arr
 	
-def normalize_mask(mask):
-	mask = mask.float().cpu().numpy()
-	mask -= mask.min()
-	mask /= mask.max()
+def normalize_arr(arr):
+	arr = arr.float().cpu().numpy()
+	arr -= arr.min()
+	arr /= arr.max()
 
-	return np.array(mask*255, dtype=np.uint8)
-	
-def tensor_to_array(t):
-	return np.array(t.cpu().squeeze(0).transpose(0, 1).transpose(1, 2)*255, dtype=np.uint8)
+	return np.array(arr*255, dtype=np.uint8)
