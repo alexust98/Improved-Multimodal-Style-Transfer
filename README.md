@@ -5,7 +5,7 @@ Command to run IMST: <br>
 <hr>
 -- content: Content image path e.g. contents/content.jpg <br>
 -- style: Style image path e.g. styles/style.jpg <br>
--- output_name: Output path for generated image, no need to add ext, e.g. out.jpg <br>
+-- output_name: Output path for generated image, e.g. out.jpg <br>
 -- imsize: Size of content and style images to be scaled to, e.g. 512x512 <br>
 -- WCT_alpha: WCT procedure content/style fusion proportion, e.g. 1.0 means full stylization, 0.0 would return content image <br>
 -- save_masks: Boolean flag whether save segmentation/clustering masks or not <br>
